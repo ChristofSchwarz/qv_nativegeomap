@@ -1,0 +1,12 @@
+CartoDB
+https://cartobase-a.global.ssl.fastly.net/light_all/${z}/${x}/${y}.png?api_key=837eb4e1cc983921567462bd3557215b06cccaea
+https://cartobase-b.global.ssl.fastly.net/light_all/${z}/${x}/${y}.png?api_key=837eb4e1cc983921567462bd3557215b06cccaea
+https://cartobase-c.global.ssl.fastly.net/light_all/${z}/${x}/${y}.png?api_key=837eb4e1cc983921567462bd3557215b06cccaea
+https://cartobase-d.global.ssl.fastly.net/light_all/${z}/${x}/${y}.png?api_key=837eb4e1cc983921567462bd3557215b06cccaea
+
+Mapbox:
+http://a.tiles.mapbox.com/v3/qlik.a9f74321/${z}/${x}/${y}.png?access_token=pk.eyJ1IjoicWxpayIsImEiOiJwZHptbGw4In0.FbrCcSWr4wJj9DeIj7VLgQ
+http://b.tiles.mapbox.com/v3/qlik.a9f74321/${z}/${x}/${y}.png?access_token=pk.eyJ1IjoicWxpayIsImEiOiJwZHptbGw4In0.FbrCcSWr4wJj9DeIj7VLgQ
+http://c.tiles.mapbox.com/v3/qlik.a9f74321/${z}/${x}/${y}.png?access_token=pk.eyJ1IjoicWxpayIsImEiOiJwZHptbGw4In0.FbrCcSWr4wJj9DeIj7VLgQ
+http://d.tiles.mapbox.com/v3/qlik.a9f74321/${z}/${x}/${y}.png?access_token=pk.eyJ1IjoicWxpayIsImEiOiJwZHptbGw4In0.FbrCcSWr4wJj9DeIj7VLgQ
+

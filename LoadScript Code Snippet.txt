@@ -1,0 +1,92 @@
+// Load Script code snipped by Christof Schwarz, csw@qlik.com
+
+
+SET v_map_wizard_defaults = 'Airport|Latitude|Longitude|600|400';
+
+_zoom_levels:
+LOAD 
+	RecNo() AS _zoom_level 
+	,256 * Pow(2, RecNo()) AS _zoom_level.power
+	,256 * Pow(2, RecNo() -1) AS _zoom_level.power.above
+AUTOGENERATE(13);
+
+
+_mapbox_maps:
+LOAD * INLINE [
+	_mapbox.map, _mapbox.label
+	qlik.a9f74321, Qlik
+	mapbox.high-contrast, Contrast
+	mapbox.streets-satellite, Satellite
+	mapbox.streets-basic, Streets
+	mapbox.dark, Dark
+];
+
+TAG FIELDS _mapbox.label, _mapbox.map WITH $hidden;
+
+
+// v_bg_image (LatFieldName, LongFieldName, map_size_x, map_size_y)
+SET v_bg_image = 'http://api.mapbox.com/v4/'
+	& MaxString(_mapbox.map)
+	& '/' & Num(Avg($2), '', '.', ' ')
+	& ',' & Num(Avg($1), '', '.', ' ')
+	& ',' & §(v_zoom($1,$2,$3,$4))
+	& '/$3x$4.jpg'
+	& '?access_token=pk.eyJ1IjoicWxpayIsImEiOiJwZHptbGw4In0.FbrCcSWr4wJj9DeIj7VLgQ';
+
+LET v_bg_image = Replace(v_bg_image,'§(', '$'&'(');
+
+// v_zoom (LatFieldName, LongFieldName, map_size_x, map_size_y)
+SET v_zoom = Alt(
+	Max(Aggr(
+		If(
+			Max( _zoom_level.power.above + ( $2 * _zoom_level.power / 360))
+			- Min( _zoom_level.power.above + ( $2 * _zoom_level.power / 360)) 
+			< $3
+		AND
+			Max(_zoom_level.power.above
+				+ Log((1 + Sin($1 * pi()/180)) / (1 - Sin($1 * pi()/180))) 
+				* -_zoom_level.power / Pi() / 4)
+			-Min(_zoom_level.power.above
+				+ Log((1 + Sin($1 * pi()/180)) / (1 - Sin($1 * pi()/180))) 
+				* -_zoom_level.power / Pi() / 4)
+			< $4
+		, _zoom_level)
+	,_zoom_level))
+,1);
+
+LET v_zoom_formula = v_zoom;
+
+
+SET v_x_min = 
+	256 * Pow(2, §(v_zoom($1,$2,$3,$4)) - 1)
+	+ Avg($2) * 256 * Pow(2, §(v_zoom($1,$2,$3,$4)) ) / 360
+	- $3 / 2;
+LET v_x_min = Replace(v_x_min,'§(', '$'&'(');
+LET v_x_max = Replace(v_x_min,'- $3 / 2', '+ $3 / 2');
+
+
+SET v_y_min = 
+	256 * Pow(2, §(v_zoom($1,$2,$3,$4)) -1)
+	+(
+		Log((1 + Sin(Avg($1) * pi()/180)) / (1 - Sin(Avg($1) * pi()/180)))
+		* -256 * Pow(2, §(v_zoom($1,$2,$3,$4)) ) / Pi() / 4
+	)
+	+ $4 / 2;
+LET v_y_min = Replace(v_y_min,'§(', '$'&'(');
+LET v_y_max = Replace(v_y_min,'+ $4 / 2', '- $4 / 2');
+
+
+SET v_chart_x = 
+	256 * Pow(2, §(=§(v_zoom($1,$2,$3,$4))) - 1)
+	+ $2 * 256 * Pow(2, §(=§(v_zoom($1,$2,$3,$4))) ) / 360
+;
+LET v_chart_x = Replace(v_chart_x,'§(', '$'&'(');
+
+	
+SET v_chart_y = 
+	256 * Pow(2, §(=§(v_zoom($1,$2,$3,$4))) - 1)
+	+ Log((1 + Sin($1 * Pi()/180)) / (1 - Sin($1 * Pi()/180))) 
+	* -256 * Pow(2, §(=§(v_zoom($1,$2,$3,$4))) ) / Pi() / 4
+;
+LET v_chart_y = Replace(v_chart_y,'§(', '$'&'(');
+

@@ -1,0 +1,390 @@
+' VB Macro code snippet by Christof Schwarz, csw@qlik.com 
+
+Const pixelfactor = 3.12
+
+Sub CREATEMAP
+
+	Set obj = ActiveDocument.GetSheetObject("CREATEMAP")
+	If obj is Nothing Then
+		Msgbox "Cannot find object with id CREATEMAP.", 16, "Error"
+		Exit Sub	
+	End If
+	On Error Goto 0 
+	Set fr = obj.GetFrameDef
+    LeftPos = fr.Rect.Left
+    TopPos = fr.Rect.Top
+
+'	Call vb_CreateScatter ( LeftPos, TopPos, "Latitude", "Longitude", 600, 400)
+'	Exit Sub
+	MainDim = ActiveDocument.Evaluate("SubField(v_map_wizard_defaults,'|',1)")
+	Do
+		MainDim = Trim(inputbox("Enter Point Dimension Field", "", MainDim))
+		If MainDim = "" Then Exit Sub
+		exists = ActiveDocument.Evaluate("Sum({1}$Field='" & MainDim & "')") 
+		If not exists Then Msgbox MainDim & " is not a valid field"
+	Loop Until exists
+	
+	LatField = ActiveDocument.Evaluate("SubField(v_map_wizard_defaults,'|',2)")
+	Do
+		LatField = Trim(inputbox("Enter Latitude field", "" , LatField))
+		If LatField = "" Then Exit Sub
+		exists = ActiveDocument.Evaluate("Sum({1}$Field='" & LatField & "')") 
+		If not exists Then Msgbox LatField & " is not a valid field"
+	Loop Until exists
+
+	LongField = ActiveDocument.Evaluate("SubField(v_map_wizard_defaults,'|',3)")
+	Do
+		LongField = Trim(inputbox("Enter Longitude field", "", LongField))
+		If LongField = "" Then Exit Sub
+		exists = ActiveDocument.Evaluate("Sum({1}$Field='" & LongField & "')") 
+		If not exists Then Msgbox LongField & " is not a valid field"
+	Loop Until exists
+
+	MapWidth = ActiveDocument.Evaluate("SubField(v_map_wizard_defaults,'|',4)")
+	Do
+		MapWidth = Trim(inputbox("Enter width of map (px)", "", MapWidth))
+		If MapWidth = "" Then Exit Sub
+		isgood = Isnumeric(MapWidth)
+		If Not isgood Then Msgbox "Please enter a number"
+	Loop Until isgood
+
+	MapHeight = ActiveDocument.Evaluate("SubField(v_map_wizard_defaults,'|',5)")
+	Do
+		MapHeight = Trim(inputbox("Enter height of map (px)", "", MapHeight))
+		If MapHeight = "" Then Exit Sub
+		isgood = Isnumeric(MapHeight)
+		If Not isgood Then Msgbox "Please enter a number"
+	Loop Until isgood
+
+
+    Call vb_CreateScatter (LeftPos, TopPos, MainDim, LatField, LongField, MapWidth, MapHeight)
+
+	Call vb_CreateTextboxes (LeftPos, TopPos, LatField, LongField, MapWidth, MapHeight)      
+
+    Call vb_CreateZoomSlider (LeftPos + ( MapWidth + 20 ) * pixelfactor, TopPos + 40 * pixelfactor)
+
+    Call vb_CreateAutozoomButton  (LeftPos + ( MapWidth + 20 ) * pixelfactor, TopPos + 237 * pixelfactor _
+    	, LatField, LongField, MapWidth, MapHeight)  
+
+    Call vb_CreateListbox (LeftPos + 10 * pixelfactor, TopPos + (MapHeight + 43) * pixelfactor)   
+
+       
+    x = inputbox("Put this formula into the background-image formula of the main chart" _
+    	,"", "=$(v_bg_image(" & LatField & "," & LongField & "," & MapWidth & "," & MapHeight& "))" )
+End Sub
+
+
+
+Sub vb_CreateScatter (LeftPos, TopPos, MainDim, LatField, LongField, MapWidth, MapHeight)
+
+
+	set chart = ActiveDocument.ActiveSheet.CreateScatterChart
+	chart.AddDimension MainDim
+	chart.AddExpression "Dual(" & LongField & ",$(v_chart_x(" & LatField & "," & LongField & "," & MapWidth & "," & MapHeight& ")))"
+	chart.AddExpression "Dual(" & LatField & ",$(v_chart_y(" & LatField & "," & LongField & "," & MapWidth & "," & MapHeight& ")))"
+
+	Set prop = chart.GetProperties
+
+	prop.GraphLayout.WindowTitle.v = MainDim & " Geopoints"
+
+	prop.Expressions.Item(0).Item(0).Data.ExpressionVisual.Label.v = LongField
+	prop.Expressions.Item(1).Item(0).Data.ExpressionVisual.Label.v = LatField
+'	prop.Expressions.Item(1).Item(0).Data.ExpressionVisual.ShowExpressionLabel = false	
+
+
+	prop.ChartProperties.ScatterAdvancedMode = true 
+	prop.ChartProperties.ScatterShowXLabel = false     
+	prop.ChartProperties.ScatterShowYLabel = false     
+	prop.ChartProperties.Title.Show = false	
+	prop.ChartProperties.SymbolSize = 15  ' Bubblesize = 4 pt
+	prop.ChartProperties.Legend.Show = false
+
+	' draw frame around plot area
+	prop.ChartProperties.PlotAreaMode = 0 ' Plot Area with frame
+	prop.ChartProperties.BorderWidth = 2
+	prop.ChartProperties.BorderColor.PrimaryCol.Col = RGB(84,84,84) ' Frame color	
+	
+	' transparent plot area 
+	prop.ChartProperties.PlotAreaColor.PrimaryCol.IsCalculated = true   
+	prop.ChartProperties.PlotAreaColor.PrimaryCol.ColorExpr.v = "ARGB(0,0,0,0)" 
+
+	' transparent background 
+	prop.ChartProperties.BackgroundColor.PrimaryCol.IsCalculated = true
+	prop.ChartProperties.BackgroundColor.PrimaryCol.ColorExpr.v = "ARGB(0,0,0,0)" 
+	
+	' Bubble Color 
+	set bce = prop.Expressions.Item(0).Item(0).Data.AttributeExpressions.BkgColorExp
+	bce.Definition.v = "=Num#('CC4477AA', '(hex)')"
+	
+
+	prop.ChartProperties.BkgMode = 3 'dynamic image background  
+	' I found no way via this API to set the formula of the dynamic background
+'	prop.ChartProperties.DynamicImage.v = "C:\Users\csw\Desktop\2016-06-21-PHOTO-00000065.jpg"
+
+
+	prop.ChartProperties.ScatterChartMode = 6   
+	'Look of scatter chart
+	'0   =   Multiple symbols
+	'1   =   Single symbol PLUS
+	'2   =   Single symbol CROSS
+	'3   =   Single symbol CIRCLE
+	'4   =   Single symbol BALL
+	'5   =   Bubble CIRCLE
+	'6   =   Bubble BALL
+	'7   =   Bubble 3D BALL
+
+	' ? Settings for X axis
+	prop.Expressions.Item(0).Item(0).Data.AxisData.Force0 = false  
+	prop.Expressions.Item(0).Item(0).Data.AxisData.Show = false  	
+	prop.Expressions.Item(0).Item(0).Data.AxisData.Min.v = "=$(v_x_min(" & LatField & "," & LongField & "," & MapWidth & "," & MapHeight& "))"               
+	prop.Expressions.Item(0).Item(0).Data.AxisData.Max.v = "=$(v_x_max(" & LatField & "," & LongField & "," & MapWidth & "," & MapHeight& "))"
+	               
+	' ? Settings for Y axis 
+	prop.Expressions.Item(1).Item(0).Data.AxisData.Force0 = false   
+	prop.Expressions.Item(1).Item(0).Data.AxisData.Show = false  	 	
+	prop.Expressions.Item(1).Item(0).Data.AxisData.Min.v = "=$(v_y_min(" & LatField & "," & LongField & "," & MapWidth & "," & MapHeight& "))"
+	prop.Expressions.Item(1).Item(0).Data.AxisData.Max.v = "=$(v_y_max(" & LatField & "," & LongField & "," & MapWidth & "," & MapHeight& "))"
+	
+	
+	prop.ChartProperties.RightAxisUserSized = true
+	prop.ChartProperties.RightAxisPosition.Width = 69 * pixelfactor
+	prop.ChartProperties.BottomAxisUserSized = true
+	prop.ChartProperties.BottomAxisPosition.Height = 31 * pixelfactor
+
+	prop.GraphLayout.Frame.AllowMoveSize = false
+	
+	chart.SetProperties prop
+
+
+
+	dim dummy(0)  'dummy array indicates all parts of frame to be set
+	Set fr = chart.GetFrameDef
+	fr.Rect.Left = LeftPos
+	fr.Rect.Top = TopPos
+    fr.Rect.Width = (MapWidth + 78) * pixelfactor
+    fr.Rect.Height = (MapHeight + 68) * pixelfactor
+
+    Call chart.SetFrame(fr,true,dummy)
+
+End Sub
+
+
+
+
+
+Sub vb_CreateAutozoomButton (LeftPos, TopPos, LatField, LongField, MapWidth, MapHeight)
+
+
+	set obj = ActiveDocument.ActiveSheet.CreateTextObject
+	prop = obj.GetProperties
+	prop.Layout.Text.v = "Auto"
+
+	' ? Calculated background color	
+	prop.Layout.BkgColor.PrimaryCol.IsCalculated = true
+	prop.Layout.BkgColor.PrimaryCol.ColorExpr.v = "=If(Len(v_zoom)<=2, QlikTechGray(), RGB(82,204,82))"
+	
+	' ? Font color
+	prop.Layout.TextColor.PrimaryCol.Col = RGB(255,255,255) 
+
+	' ? Add "set variable" action
+	Set ButtonActions = prop.Layout.ActionItems
+	ButtonActions.Add
+	ButtonActions.Item(0).Type = 31 ' 31 = Set Variable
+	Set ActionParam = ButtonActions.Item(0).Parameters
+    ActionParam.Add
+    ActionParam.Item(0).v = "v_zoom"
+    ActionParam.Add
+    ActionParam.Item(1).v = "=v_zoom_formula"	
+
+	prop.Layout.Frame.AllowMoveSize = false
+	prop.Layout.Frame.ShowCaption = true
+	prop.Layout.Frame.TextAdjustHorizontal = 1    'center	
+	prop.Layout.Frame.CaptionFont.Bold = false
+	prop.Layout.Frame.CaptionFont.PointSize1000 = 10000
+	prop.Layout.Frame.Name.v = "=$(v_zoom(" & LatField & "," & LongField & "," & MapWidth & "," & MapHeight & "))"
+	prop.Layout.Frame.ActiveBgColor.PrimaryCol.Col = RGB(255,255,255)
+	prop.Layout.Frame.BgColor.PrimaryCol.Col = RGB(255,255,255)
+	
+	obj.SetProperties prop
+
+	' ? Set object size and layer
+	obj.SetLayer 1
+	dim dummy(0)  'dummy array indicates all parts of frame to be set
+	Set fr = obj.GetFrameDef
+	fr.Rect.Left = LeftPos
+	fr.Rect.Top = TopPos 
+    fr.Rect.Width = 40 * pixelfactor
+    fr.Rect.Height = 42 * pixelfactor
+    
+    Call obj.SetFrame(fr,true,dummy)
+
+End Sub
+
+
+
+Sub vb_CreateZoomSlider (LeftPos, TopPos)
+
+	Set obj = ActiveDocument.ActiveSheet.CreateSlider
+	Set prop = obj.GetProperties
+	prop.Name1.Name = "v_zoom"
+	prop.Name1.Type = 1
+
+	Set sl = prop.Layout
+	sl.Vertical = true    
+	sl.Min.v = 1
+	sl.Max.v = 15
+	sl.UseStaticStep = true
+	sl.Step.v = 1
+
+	prop.Layout.Frame.AllowMoveSize = false
+	prop.Layout.Frame.ShowCaption = true
+	prop.Layout.Frame.TextAdjustHorizontal = 1    'center	
+	prop.Layout.Frame.CaptionFont.Bold = false
+	prop.Layout.Frame.CaptionFont.PointSize1000 = 8000
+	prop.Layout.Frame.Name.v = "Zoom" 
+	prop.Layout.Frame.ActiveBgColor.PrimaryCol.Col = RGB(255,255,255)
+	prop.Layout.Frame.BgColor.PrimaryCol.Col = RGB(255,255,255)
+		         
+	obj.SetProperties prop
+
+	' ? Set object size and layer
+	obj.SetLayer 1
+	dim dummy(0)  'dummy array indicates all parts of frame to be set
+	Set fr = obj.GetFrameDef
+	fr.Rect.Left = LeftPos 
+	fr.Rect.Top = TopPos 
+    fr.Rect.Width = 40 * pixelfactor
+    fr.Rect.Height = 200 * pixelfactor
+    
+    Call obj.SetFrame(fr,true,dummy)
+
+End Sub
+
+
+
+
+
+Sub vb_CreateListbox (LeftPos, TopPos)
+
+	set obj = ActiveDocument.ActiveSheet.CreateListBox
+	set prop = obj.GetProperties
+	prop.Def.Name = "_mapbox.label"
+	' Horizontal alignment
+	prop.Layout.MultiColumn = true
+	prop.Layout.FixedColumnsCount = -1	
+	prop.Layout.OrderByRow = -1
+	prop.Layout.TextAdjust = 1
+	prop.Layout.Frame.ShowCaption = false
+	prop.Layout.Frame.AllowMoveSize = false
+		
+	obj.SetProperties prop	
+
+	' ? Set object size and layer
+	obj.SetLayer 1
+	dim dummy(0)  'dummy array indicates all parts of frame to be set
+	Set fr = obj.GetFrameDef
+    fr.Rect.Left = LeftPos
+    fr.Rect.Top = TopPos
+    fr.Rect.Width = 300 * pixelfactor
+    fr.Rect.Height = 16 * pixelfactor
+    
+    Call obj.SetFrame(fr,true,dummy)	
+End Sub
+
+
+
+
+
+Sub vb_CreateTextboxes (LeftPos, TopPos, LatField, LongField, MapWidth, MapHeight)
+
+
+	set obj = ActiveDocument.ActiveSheet.CreateTextObject
+	prop = obj.GetProperties
+
+	prop.Layout.Frame.ShowCaption = false
+	prop.Layout.Text.v = "=$(v_bg_image(" & LatField & "," & LongField & "," & MapWidth & "," & MapHeight& "))"	
+	prop.Layout.BkgColor.PrimaryCol.IsCalculated = true
+	prop.Layout.BkgColor.PrimaryCol.ColorExpr.v = "=White()"
+	prop.Layout.ImageRepresentation.Presentation = 1        'interpret as image
+	prop.Layout.ImageRepresentation.CellImageStyle.StretchMode = 0   'no stretch
+	prop.Layout.TextAdjustHorizontal = 1 ' 1= center
+	prop.Layout.TextAdjustVertical = 8 ' 8 = bottom
+
+	prop.Layout.Frame.AllowMoveSize = false
+
+	obj.SetProperties prop
+
+	' Create 2nd text box on top of the background image to display a warning
+	
+	' ? Set object size and layer
+	obj.SetLayer -2
+	dim dummy(0)  'dummy array indicates all parts of frame to be set
+	Set fr = obj.GetFrameDef
+	fr.Rect.Left = LeftPos
+	fr.Rect.Top = TopPos
+    fr.Rect.Width = (MapWidth + 16) * pixelfactor
+    fr.Rect.Height = (MapHeight + 36) * pixelfactor
+    
+    Call obj.SetFrame(fr,true,dummy)
+
+
+	set obj = ActiveDocument.ActiveSheet.CreateTextObject
+	prop = obj.GetProperties
+	prop.Layout.Text.v = "='=$' & '(v_bg_image(" & LatField & "," & LongField & "," & MapWidth & "," & MapHeight& "))'"
+	
+	prop.Layout.BkgColor.PrimaryCol.IsCalculated = true   
+	prop.Layout.BkgColor.PrimaryCol.ColorExpr.v = "ARGB(128,255,255,0)"   
+	prop.Layout.Frame.Font.Bold = true
+	prop.Layout.Frame.ShowCaption = true
+	prop.Layout.Frame.TextAdjustHorizontal = 1    'center	
+	prop.Layout.Frame.CaptionFont.Bold = true
+	prop.Layout.Frame.CaptionFont.PointSize1000 = 10000
+	prop.Layout.Frame.Name.v = "If you can read this, you did not set the background formula of the chart" 	
+	prop.Layout.Frame.BgColor.PrimaryCol.IsCalculated = true 
+	prop.Layout.Frame.BgColor.PrimaryCol.ColorExpr.v = "ARGB(128,255,255,0)"
+	prop.Layout.Frame.ActiveBgColor.PrimaryCol.IsCalculated = true 
+	prop.Layout.Frame.ActiveBgColor.PrimaryCol.ColorExpr.v = "ARGB(128,255,255,0)"
+	
+	obj.SetProperties prop
+
+	' ? Set object size and layer
+	obj.SetLayer -1
+	'dim dummy(0)  'dummy array indicates all parts of frame to be set
+	Set fr = obj.GetFrameDef
+	fr.Rect.Left = LeftPos 
+	fr.Rect.Top = TopPos + MapHeight / 2 * pixelfactor
+    fr.Rect.Width = (MapWidth + 100) * pixelfactor
+    fr.Rect.Height = 50 * pixelfactor
+    Call obj.SetFrame(fr,true,dummy)
+	
+End Sub
+
+
+
+
+Sub test
+Leftpos = 500
+topPos = 300
+MapHeight = 400
+MapWidth = 600
+
+	set obj = ActiveDocument.ActiveSheet.CreateTextObject
+	prop = obj.GetProperties
+	prop.Layout.Text.v = "If you can read this, you did not set the background formula of the chart"
+	prop.Layout.BkgColor.PrimaryCol.IsCalculated = true   
+	prop.Layout.BkgColor.PrimaryCol.ColorExpr.v = "ARGB(64,255,255,0)"   
+	prop.Layout.Frame.Font.Bold = true
+	
+	obj.SetProperties prop
+
+	' ? Set object size and layer
+	obj.SetLayer -1
+	dim dummy(0)  'dummy array indicates all parts of frame to be set
+	Set fr = obj.GetFrameDef
+	fr.Rect.Left = LeftPos
+	fr.Rect.Top = TopPos
+    fr.Rect.Width = (MapWidth + 16) * pixelfactor
+    fr.Rect.Height = (MapHeight + 36) * pixelfactor
+    Call obj.SetFrame(fr,true,dummy)
+
+End Sub
